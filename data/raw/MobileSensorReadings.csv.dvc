@@ -1,0 +1,5 @@
+outs:
+- md5: 8be6a38116204632d6f13c3275c58c77
+  size: 134
+  hash: md5
+  path: MobileSensorReadings.csv

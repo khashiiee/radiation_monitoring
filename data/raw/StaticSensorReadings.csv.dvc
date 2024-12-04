@@ -1,0 +1,5 @@
+outs:
+- md5: 2165dccdd64d8cc68c02fe08c1799f93
+  size: 25596065
+  hash: md5
+  path: StaticSensorReadings.csv
