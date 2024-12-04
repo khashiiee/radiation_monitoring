@@ -27,36 +27,44 @@ class RadiationDashboard:
     def load_data(self):
         """Load all necessary data files"""
         print("Loading data...")
-        
-        # Load shapefile
-        shapefile_path = self.data_dir.parent / "StHimarkNeighborhoodShapefile" / "StHimark.shp"
-        self.gdf = gpd.read_file(shapefile_path)
-        
-        # Load static sensor locations
-        self.static_locations = pd.read_csv(
-            self.data_dir / 'StaticSensorLocations.csv'
-        )
-        
-        # Load static sensor readings
-        self.static_data = pd.read_csv(
-            self.data_dir / 'StaticSensorReadings.csv',
-            parse_dates=['Timestamp']
-        )
-        
-        # Load mobile sensor readings
-        self.mobile_data = pd.read_csv(
-            self.data_dir / 'MobileSensorReadings.csv',
-            parse_dates=['Timestamp']
-        )
-        
-        # Merge static data with locations
-        self.static_data_with_loc = pd.merge(
-            self.static_data,
-            self.static_locations,
-            on='Sensor-id'
-        )
-        
-        print("Data loaded successfully!")
+        try:
+            # Load shapefile
+            shapefile_path = self.data_dir.parent / "StHimarkNeighborhoodShapefile" / "StHimark.shp"
+            print(f"Loading shapefile from {shapefile_path}")
+            self.gdf = gpd.read_file(shapefile_path)
+            
+            # Load static sensor locations
+            print("Loading static sensor locations...")
+            self.static_locations = pd.read_csv(
+                self.data_dir / 'StaticSensorLocations.csv'
+            )
+            print("Static location columns:", self.static_locations.columns.tolist())
+            
+            # Load static sensor readings
+            print("Loading static sensor readings...")
+            self.static_data = pd.read_csv(
+                self.data_dir / 'StaticSensorReadings.csv',
+                parse_dates=['Timestamp']
+            )
+            print("Static readings columns:", self.static_data.columns.tolist())
+            
+            # Merge static data with locations
+            print("Merging static data with locations...")
+            self.static_data_with_loc = pd.merge(
+                self.static_data,
+                self.static_locations,
+                on='Sensor-id'
+            )
+            
+            print("Data loaded successfully!")
+            
+        except Exception as e:
+            print(f"\nError loading data: {str(e)}")
+            print("\nDebug information:")
+            print(f"Current directory: {Path.cwd()}")
+            print(f"Data directory: {self.data_dir}")
+            print("Files in data directory:", list(self.data_dir.glob("*")))
+            raise
     
     def create_coverage_points(self, lat, lon, num_points=20, radius=500):
         """Create points around a center location to simulate coverage"""
@@ -120,22 +128,6 @@ class RadiationDashboard:
                 name='Sensor Coverage'
             ).add_to(m)
         
-        # Add mobile sensors using clustering
-        marker_cluster = MarkerCluster(name='Mobile Sensors').add_to(m)
-        
-        # Get unique mobile sensor locations at the first timestamp
-        mobile_first = self.mobile_data.groupby('Sensor-id').first().reset_index()
-        
-        for _, row in mobile_first.iterrows():
-            folium.CircleMarker(
-                location=[row['Lat'], row['Long']],
-                radius=3,
-                color='blue',
-                fill=True,
-                popup=f"Mobile Sensor {row['Sensor-id']}",
-                tooltip=f"Mobile Sensor {row['Sensor-id']}"
-            ).add_to(marker_cluster)
-        
         # Create coverage heatmap
         coverage_points = []
         for _, row in self.static_locations.iterrows():
@@ -186,7 +178,6 @@ class RadiationDashboard:
                     font-size: 14px;">
             <p><strong>Sensor Types</strong></p>
             <p><i class="fa fa-circle" style="color:red"></i> Static Sensors</p>
-            <p><i class="fa fa-circle" style="color:blue"></i> Mobile Sensors</p>
             <p><strong>Coverage</strong></p>
             <p style="color:red;opacity:0.3;">⬤</p> Sensor Range (500m)
         </div>
@@ -199,16 +190,10 @@ class RadiationDashboard:
         
         return 'temp_map.html'
     
-    # [Previous time series and statistics methods remain the same]
     def create_time_series(self):
         """Create time series visualization"""
-        # Calculate hourly averages
+        # Calculate hourly averages for static sensors only
         static_hourly = (self.static_data_with_loc
-                        .groupby([pd.Grouper(key='Timestamp', freq='h')])
-                        ['Value'].mean()
-                        .reset_index())
-        
-        mobile_hourly = (self.mobile_data
                         .groupby([pd.Grouper(key='Timestamp', freq='h')])
                         ['Value'].mean()
                         .reset_index())
@@ -225,16 +210,6 @@ class RadiationDashboard:
             )
         )
         
-        # Add mobile sensor average
-        fig.add_trace(
-            go.Scatter(
-                x=mobile_hourly['Timestamp'],
-                y=mobile_hourly['Value'],
-                name='Mobile Sensors Avg',
-                line=dict(color='red', width=2)
-            )
-        )
-        
         fig.update_layout(
             title='Average Radiation Levels Over Time',
             xaxis_title='Time',
@@ -246,25 +221,19 @@ class RadiationDashboard:
     
     def create_statistics_plot(self):
         """Create statistics visualization"""
-        # Calculate statistics for both sensor types
+        # Calculate statistics for static sensors only
         static_stats = self.static_data['Value'].describe()
-        mobile_stats = self.mobile_data['Value'].describe()
         
-        # Create bar chart comparing statistics
+        # Create bar chart
         fig = go.Figure(data=[
             go.Bar(name='Static Sensors', 
                   x=['Mean', 'Median', 'Std Dev', 'Max'],
                   y=[static_stats['mean'], static_stats['50%'], 
-                     static_stats['std'], static_stats['max']]),
-            go.Bar(name='Mobile Sensors', 
-                  x=['Mean', 'Median', 'Std Dev', 'Max'],
-                  y=[mobile_stats['mean'], mobile_stats['50%'], 
-                     mobile_stats['std'], mobile_stats['max']])
+                     static_stats['std'], static_stats['max']])
         ])
         
         fig.update_layout(
             title='Radiation Level Statistics',
-            barmode='group',
             yaxis_title='Value (cpm)'
         )
         
@@ -272,7 +241,6 @@ class RadiationDashboard:
     
     def create_dashboard(self):
         """Create and save the complete dashboard"""
-        # [Previous dashboard HTML generation code remains the same]
         # Get first timestamp for initial map
         initial_timestamp = self.static_data['Timestamp'].min().floor('h')
         
@@ -304,6 +272,7 @@ class RadiationDashboard:
                 <div class="status">
                     <h3>Current Status</h3>
                     <p>Last Updated: <span id="timestamp">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</span></p>
+                    <p style="color: orange;">Note: Currently showing static sensor data only.</p>
                 </div>
                 
                 <div class="row">
