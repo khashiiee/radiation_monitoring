@@ -1,0 +1,4 @@
+data/raw/MobileSensorReadings.csv
+data/raw/StaticSensorReadings.csv
+data/raw/StaticSensorLocations.csv
+data/raw/*.csv
